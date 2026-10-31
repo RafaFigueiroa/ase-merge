@@ -18,7 +18,7 @@ Exact match = resolução e referência iguais após normalizar espaços (' '.jo
 a mesma normalização do dataset_parallel.py. Diferença: o MergeGen trunca a referência
 em 200 tokens; aqui a comparação é com a referência inteira.
 """
-import argparse, json, re, threading
+import argparse, json, os, re, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -137,7 +137,10 @@ def main():
     print(f"{args.split}: {len(split_index)} exemplos, {len(done)} já resolvidos, {len(todo)} a resolver "
           f"com {args.model} (effort {args.effort})", flush=True)
 
-    client = anthropic.Anthropic()
+    # chaves com escopo de organização exigem o cabeçalho anthropic-workspace-id
+    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    client = anthropic.Anthropic(
+        default_headers={"anthropic-workspace-id": workspace_id} if workspace_id else None)
     lock = threading.Lock()
 
     def work(i):

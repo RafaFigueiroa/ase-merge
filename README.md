@@ -141,6 +141,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 A `ANTHROPIC_API_KEY` already set in the environment takes precedence over the `.env`.
 
+With an Organization-scoped API key, also set `ANTHROPIC_WORKSPACE_ID` (the ID of the workspace to use); workspace-scoped keys do not need it.
+
 Run it after step 5 (test), or on an archived run with `--run`:
 
 ```sh
