@@ -3,7 +3,7 @@ Arquiva os artefatos de uma execução (pré-processamento, treino e teste) em r
 e deixa o projeto limpo para a próxima execução.
 Rode com: python archive_run.py <nome> [--dry-run]
 
-- move:   divisão (all_index), modelo, estado do treino, dados processados e saídas
+- move:   divisão (all_index), modelo, estado do treino, dados processados e saídas (inclusive do run_claude.py)
 - copia:  RAW_DATA/raw_data e raw_data_ids.json (entrada da execução; os índices do all_index apontam para eles)
 - apaga:  PROCESSED/ e GIT_MERGE_FILES/ (intermediários, regenerados pelo pré-processamento)
 A saída original dos autores (OUTPUT/test_output) não é tocada.
@@ -18,7 +18,7 @@ MOVE = [
     "OUTPUT/DEV_OUTPUT", "OUTPUT/test_OUTPUT",
     "OUTPUT/train_process", "OUTPUT/dev_process", "OUTPUT/test_process",
     "OUTPUT/total_gen_output_dev.json", "OUTPUT/total_gen_output_test_beam.json",
-    "RESULTS",
+    "OUTPUT/claude", "RESULTS",
 ]
 COPY = ["RAW_DATA/raw_data", "RAW_DATA/raw_data_ids.json"]
 DELETE = ["PROCESSED", "GIT_MERGE_FILES"]

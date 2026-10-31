@@ -11,6 +11,7 @@ MergeGen is a generation-based merge conflict resolution approach: it represents
 | `runtotal_dataset.py` + `dataset_parallel.py` | Parallel pre-processing (token-level merge with `git merge-file`) → `PROCESSED/` |
 | `dataset.py` | Combines the `PROCESSED/` chunks and splits them into train/validation/test (8:1:1) |
 | `run_mergegen.py` | Model, training (`train`), validation (`dev`) and testing (`test`) |
+| `run_claude.py` | Resolves the same test examples with the Claude API, for comparison |
 | `archive_run.py` | Archives the artifacts of a run into `runs/<name>/` and cleans the project |
 | `codet5-small/` | Local copy of the base model (not versioned) |
 | `RAW_DATA/fse2022/` | MergeBERT dataset downloaded from Zenodo (not versioned) |
@@ -113,7 +114,60 @@ python archive_run.py toy400-java
 
 Moves the split, model, logs and outputs into `runs/<name>/`, copies `raw_data` and `raw_data_ids.json`, deletes `PROCESSED/` and `GIT_MERGE_FILES/`, and writes `runs/<name>/run_info.json` with the number of examples, the split and the accuracy. The project is then clean for the next run (go back to step 2).
 
-Each run's `raw_data` and `all_index` (`test` key) make it possible to evaluate other approaches — for example, the Claude API — on exactly the same test examples.
+Each run's `raw_data` and `all_index` (`test` key) make it possible to evaluate other approaches on exactly the same test examples (see below).
+
+## **Resolving with the Claude API**
+
+`run_claude.py` sends each test conflict to Claude and measures exact-match accuracy on the same examples MergeGen was tested on. It needs only the packages in `requirements-claude.txt`; `anthropic` requires Python ≥ 3.10 — so it runs in its own virtual environment, **not** in `ase-merge` (Python 3.8). Create it once (with any Python ≥ 3.10; on Windows, `py -3.14` picks the version):
+
+```sh
+py -3.14 -m venv .venv-claude
+.venv-claude\Scripts\python -m pip install -r requirements-claude.txt
+```
+
+Activate it before running (`conda deactivate` first if `ase-merge` is active):
+
+```sh
+.venv-claude\Scripts\Activate.ps1
+```
+
+On cmd use `.venv-claude\Scripts\activate.bat`; on Git Bash, `source .venv-claude/Scripts/activate`.
+
+Put the API key in a `.env` file at the project root (it is git-ignored):
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+A `ANTHROPIC_API_KEY` already set in the environment takes precedence over the `.env`.
+
+Run it after step 5 (test), or on an archived run with `--run`:
+
+```sh
+python run_claude.py --limit 5
+python run_claude.py --run runs/toy400-java
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--run DIR` | `.` | Folder with `RAW_DATA/raw_data`, `RAW_DATA/raw_data_ids.json` and `all_index` |
+| `--split` | `test` | `test` or `valid` |
+| `--limit N` | all | Only the first N examples of the split (cheap trial runs) |
+| `--model` | `claude-opus-5-5` | Claude model |
+| `--effort` | `medium` | `low` … `max`: how much the model thinks (and spends) per conflict |
+| `--workers` | `4` | Simultaneous requests |
+
+Each conflict is shown as diff3 markers (ours / base / theirs) with its context lines kept apart, and Claude answers with the resolved region only. The accuracy uses the same whitespace normalization as the pre-processing; the only difference is that MergeGen truncates the reference at 200 tokens, while here the full reference is compared.
+
+Outputs go to `<DIR>/OUTPUT/claude/<model>/<split>/`:
+
+| Output | Content |
+|---|---|
+| `summary.json` | Exact-match accuracy, positions of the correct examples (as in `RESULTS/test_gen_exactly_match_ids`), refusals and tokens used |
+| `results.jsonl` | One line per example with the generated resolution |
+| `SUCCEED/` and `FAIL/` | One file per example, as in `OUTPUT/test_OUTPUT` |
+
+`results.jsonl` is also the resume point: examples already there are skipped, so an interrupted run (or one with API errors) continues where it stopped when run again. Delete the folder to start over. `archive_run.py` moves `OUTPUT/claude` along with the rest of the run.
 
 ## **Data format**
 

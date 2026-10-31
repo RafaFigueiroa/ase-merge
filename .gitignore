@@ -25,6 +25,10 @@ OUTPUT/*
 OUTPUT/test_OUTPUT/
 RESULTS/
 
+# Chave da API do Claude e ambiente virtual do run_claude.py
+.env
+.venv-claude/
+
 # Execuções arquivadas pelo archive_run.py
 runs/
 
