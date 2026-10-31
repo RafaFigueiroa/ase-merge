@@ -20,7 +20,7 @@ import os
 import copy
 import math
 from transformers import RobertaTokenizer
-model_type = 'Salesforce/codet5-small'
+model_type = './codet5-small'
 tokenizer = RobertaTokenizer.from_pretrained(model_type)
 class dotdict(dict):
     def __getattr__(self, name):  

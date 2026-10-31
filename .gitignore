@@ -1,0 +1,33 @@
+# Dados brutos (baixados do Zenodo)
+RAW_DATA/
+
+# Dados gerados pelo pré-processamento (dataset_parallel.py / dataset.py)
+GIT_MERGE_FILES/
+PROCESSED/
+processed_*.pkl
+all_index
+
+# Modelo base baixado do Hugging Face (Salesforce/codet5-small)
+codet5-small/
+
+# Checkpoint e estado do treino (run_mergegen.py)
+best_model.pt
+*.pt
+*.bin
+best_acc
+train_state
+
+# Saídas geradas por treino/teste (mantém a saída original dos autores)
+OUTPUT/*
+!OUTPUT/test_output
+!OUTPUT/test_output_old.txt
+# no Windows o git ignora maiúsculas, então a exceção acima pegaria test_OUTPUT/
+OUTPUT/test_OUTPUT/
+RESULTS/
+
+# Execuções arquivadas pelo archive_run.py
+runs/
+
+# Python
+__pycache__/
+*.py[cod]

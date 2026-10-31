@@ -1,6 +1,7 @@
 from cmath import inf
 import os
-from transformers import RobertaTokenizer, T5Model, T5ForConditionalGeneration, AdamW
+from transformers import RobertaTokenizer, T5Model, T5ForConditionalGeneration
+from torch.optim import AdamW
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 from torch import optim
 from torch.nn import functional as F
@@ -21,7 +22,7 @@ space_token = 'Ġ'
 stage = str(sys.argv[1])
 
 
-model_type = 'Salesforce/codet5-small'
+model_type = './codet5-small'
 tokenizer = RobertaTokenizer.from_pretrained(model_type)
 
 brackets_tokens = ['<lbra>', '<mbra>', '<rbra>']
@@ -40,8 +41,11 @@ class dotdict(dict):
         return self[name]
 
 args = dotdict({
-    'batch_size':35,
-    'test_batch_size':30,
+    # batch efetivo de treino = batch_size * grad_accum_steps = 35, como no código original;
+    # dividido em lotes menores para caber numa GPU de 8 GB
+    'batch_size':7,
+    'grad_accum_steps':5,
+    'test_batch_size':10,
     'epoches':100,
     'lr':1e-4,
     'model_type':model_type,
@@ -108,19 +112,24 @@ def train(accelerator, model, train_loader, optimizer, epoch, best_acc, dev_load
     total_data = 0
     total_loss = 0
 
+    steps = args.grad_accum_steps
+    optimizer.zero_grad()
     for idx, batch in enumerate(tqdm(train_loader)):
-        
+
         assert isinstance(batch, list)
         for i in range(len(batch)):
             batch[i] = get_tensor(batch[i])
 
-        
+
         loss, mask = model(batch[0], batch[1], 'train')
         loss = loss.sum() / mask.sum()
 
-        optimizer.zero_grad()
-        accelerator.backward(loss)
-        optimizer.step()
+        # acumula o gradiente de `steps` lotes antes de atualizar (o último grupo pode ser menor)
+        group_size = min(steps, len(train_loader) - idx // steps * steps)
+        accelerator.backward(loss / group_size)
+        if (idx + 1) % steps == 0 or idx + 1 == len(train_loader):
+            optimizer.step()
+            optimizer.zero_grad()
 
         total_data += len(batch[0])
         total_loss += loss.item()
@@ -138,9 +147,9 @@ def train(accelerator, model, train_loader, optimizer, epoch, best_acc, dev_load
         flag_bigger = exactly_match_ratio > best_acc
         if exactly_match_ratio > best_acc:
             best_acc = exactly_match_ratio
-            torch.save(model.module.state_dict(),"best_model.pt")
+            torch.save(model.state_dict(),"best_model.pt")
             for k in range(len(total_dev_output)):
-                p = open('OUTPUT/DEV_OUTPUT/%s'%(k),'w')
+                p = open('OUTPUT/DEV_OUTPUT/%s'%(k),'w', encoding='utf-8')
                 p.write(total_dev_output[k])
                 p.close()
 
@@ -246,9 +255,9 @@ def dev(model, val_loader, epoch, dev_type='train'):
             os.makedirs('%s/FAIL'%output_path)
         for i in range(len(total_results)):
             if total_results[i]:
-                p = open('%s/SUCCEED/%s'%(output_path, valid_index[i]), 'w')
+                p = open('%s/SUCCEED/%s'%(output_path, valid_index[i]), 'w', encoding='utf-8')
             else:
-                p = open('%s/FAIL/%s'%(output_path, valid_index[i]), 'w')
+                p = open('%s/FAIL/%s'%(output_path, valid_index[i]), 'w', encoding='utf-8')
 
             
             p.write('---------------------------------\n')
@@ -340,9 +349,9 @@ def test_beam(model, test_loader):
         os.makedirs('%s/FAIL'%output_path)
     for i in range(len(total_results)):
         if total_results[i]:
-            p = open('%s/SUCCEED/%s'%(output_path, test_index[i]), 'w')
+            p = open('%s/SUCCEED/%s'%(output_path, test_index[i]), 'w', encoding='utf-8')
         else:
-            p = open('%s/FAIL/%s'%(output_path, test_index[i]), 'w')
+            p = open('%s/FAIL/%s'%(output_path, test_index[i]), 'w', encoding='utf-8')
 
         p.write('ref_dataloader:\n%s\n'%total_target_strings[i])
         p.write('---------------------------------\n')
@@ -373,7 +382,7 @@ def main_train():
     model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
 
     if os.path.exists("best_model.pt"):
-        model.module.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
         print('model loaded!')
     if accelerator.is_main_process:
         if os.path.exists("best_model.pt"):
@@ -404,7 +413,7 @@ def main_train():
                 if small_num == max_small_num:
                     small_num = 0
                     try_num += 1
-                    model.module.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
+                    model.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
                     for g in optimizer.param_groups:
                         g['lr'] = g['lr'] * 0.5
                 if try_num == max_try_num:

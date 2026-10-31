@@ -19,8 +19,9 @@ import re
 import os
 import copy
 import math
-from transformers import RobertaTokenizer, T5Model, T5ForConditionalGeneration, AdamW
-model_type = 'Salesforce/codet5-small'
+from transformers import RobertaTokenizer, T5Model, T5ForConditionalGeneration
+from torch.optim import AdamW
+model_type = './codet5-small'
 tokenizer = RobertaTokenizer.from_pretrained(model_type)
 class dotdict(dict):
     def __getattr__(self, name):  
@@ -141,16 +142,16 @@ class Dataset(data.Dataset):
         merge_path = 'GIT_MERGE_FILES/%s'%self.ii
         if not os.path.exists(merge_path):
             os.makedirs(merge_path)
-        with open('%s/base'%merge_path, 'w') as f:
+        with open('%s/base'%merge_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(tokens_base))
-        with open('%s/a'%merge_path, 'w') as f:
+        with open('%s/a'%merge_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(tokens_a))
-        with open('%s/b'%merge_path, 'w') as f:
+        with open('%s/b'%merge_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(tokens_b))
         
         final_tokens = []
         self.execute_command('git merge-file -L a -L base -L b %s/a %s/base %s/b --diff3 -p > %s/merge'%(merge_path, merge_path, merge_path, merge_path))
-        merge_res = open('%s/merge'%merge_path).read().splitlines()
+        merge_res = open('%s/merge'%merge_path, encoding='utf-8').read().splitlines()
         merge_res = [x.strip() for x in merge_res if x.strip()]
         format_ids = [k for k, x in enumerate(merge_res) if x == '<<<<<<< a' or x == '>>>>>>> b' or x == '||||||| base' or x == '=======']
         assert len(format_ids) % 4 == 0
