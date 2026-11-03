@@ -10,15 +10,15 @@ o ambiente .venv-claude com requirements-claude.txt (requer Python >= 3.10, por 
 no ambiente ase-merge, de 3.8; veja o README). A chave vem de ANTHROPIC_API_KEY, no ambiente ou num .env na raiz do projeto.
 
 Saídas em <DIR>/OUTPUT/claude/<modelo>/<split>/:
-  results.jsonl   uma linha por exemplo (resolução gerada, acerto, tokens); permite retomar
+  results.jsonl   uma linha por exemplo (resolução gerada, acerto, tokens, tempo); permite retomar
   SUCCEED/, FAIL/ um arquivo por exemplo, no mesmo formato do test_OUTPUT do MergeGen
-  summary.json    acurácia, posições acertadas (como RESULTS/test_gen_exactly_match_ids) e tokens
+  summary.json    acurácia, posições acertadas (como RESULTS/test_gen_exactly_match_ids), tokens e tempo total
 
 Exact match = resolução e referência iguais após normalizar espaços (' '.join(s.split())),
 a mesma normalização do dataset_parallel.py. Diferença: o MergeGen trunca a referência
 em 200 tokens; aqui a comparação é com a referência inteira.
 """
-import argparse, json, re, threading
+import argparse, json, os, re, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -84,6 +84,7 @@ def resolve(client, model, effort, lang, base, a, b):
     before, after, (c_base, c_a, c_b) = split_context(base, a, b)
     prompt = PROMPT.format(lang=lang, before=before or "(none)\n", after=after or "(none)\n",
                            base=c_base, a=c_a, b=c_b)
+    start = time.perf_counter()
     response = client.beta.messages.create(
         model=model,
         max_tokens=16000,
@@ -95,6 +96,7 @@ def resolve(client, model, effort, lang, base, a, b):
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
     )
+    elapsed = time.perf_counter() - start
     text = "".join(blk.text for blk in response.content if blk.type == "text")
     found = RESOLUTION_RE.findall(text)
     return {
@@ -104,6 +106,7 @@ def resolve(client, model, effort, lang, base, a, b):
         "model": response.model,
         "input_tokens": response.usage.input_tokens,
         "output_tokens": response.usage.output_tokens,
+        "time_s": round(elapsed, 3),
     }
 
 
@@ -137,7 +140,10 @@ def main():
     print(f"{args.split}: {len(split_index)} exemplos, {len(done)} já resolvidos, {len(todo)} a resolver "
           f"com {args.model} (effort {args.effort})", flush=True)
 
-    client = anthropic.Anthropic()
+    # chaves com escopo de organização exigem o cabeçalho anthropic-workspace-id
+    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    client = anthropic.Anthropic(
+        default_headers={"anthropic-workspace-id": workspace_id} if workspace_id else None)
     lock = threading.Lock()
 
     def work(i):
@@ -192,6 +198,7 @@ def main():
         "parse_errors": sum(done[i]["parse_error"] for i in resolved),
         "input_tokens": sum(done[i]["input_tokens"] for i in resolved),
         "output_tokens": sum(done[i]["output_tokens"] for i in resolved),
+        "total_time_s": round(sum(done[i].get("time_s", 0) for i in resolved), 1),
     }
     json.dump(summary, open(out / "summary.json", "w", encoding="utf-8"), indent=2)
     print(f"exactly match: {summary['exactly_match']:.4f} ({len(positions)}/{len(resolved)})"

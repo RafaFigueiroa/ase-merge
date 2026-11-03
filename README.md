@@ -141,6 +141,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 A `ANTHROPIC_API_KEY` already set in the environment takes precedence over the `.env`.
 
+With an Organization-scoped API key, also set `ANTHROPIC_WORKSPACE_ID` (the ID of the workspace to use); workspace-scoped keys do not need it.
+
 Run it after step 5 (test), or on an archived run with `--run`:
 
 ```sh
@@ -163,8 +165,8 @@ Outputs go to `<DIR>/OUTPUT/claude/<model>/<split>/`:
 
 | Output | Content |
 |---|---|
-| `summary.json` | Exact-match accuracy, positions of the correct examples (as in `RESULTS/test_gen_exactly_match_ids`), refusals and tokens used |
-| `results.jsonl` | One line per example with the generated resolution |
+| `summary.json` | Exact-match accuracy, positions of the correct examples (as in `RESULTS/test_gen_exactly_match_ids`), refusals, tokens used and total time |
+| `results.jsonl` | One line per example with the generated resolution, tokens and time per call (`time_s`) |
 | `SUCCEED/` and `FAIL/` | One file per example, as in `OUTPUT/test_OUTPUT` |
 
 `results.jsonl` is also the resume point: examples already there are skipped, so an interrupted run (or one with API errors) continues where it stopped when run again. Delete the folder to start over. `archive_run.py` moves `OUTPUT/claude` along with the rest of the run.
